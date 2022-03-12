@@ -445,30 +445,36 @@ BOOL CPTxManager::SetCh(int iID, unsigned long ulCh, DWORD dwTSID, BOOL &hasStre
 	}
 
 	if( enISDB == PT::Device::ISDB_S ){
-		if(!(dwTSID&~7UL)) {
-			//dwTSIDに0～7が指定された場合は、TSIDをチューナーから取得して
-			//下位３ビットと一致するものに書き換える
-			// by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
-			Sleep(50);
-			for (DWORD t=0,s=dur(); t<m_dwMaxDurTMCC; t=dur(s)) {
-				PTTSIDLIST PtTSIDList = {0};
-				bRes = GetIdListS(iID, &PtTSIDList);
-				if (bRes) {
-					for (uint32 i=0; i<8; i++) {
-						DWORD id = PtTSIDList.dwId[i]&0xffff;
-						if ((id&0xff00) && (id^0xffff)) {
-							if( (id&7) == dwTSID ) { //ストリームに一致した
-								//一致したidに書き換える
-								dwTSID = id ;
-								_OutputDebugString(L"CPT%dManager::SetCh: replaced TSID=%d\n",PT_VER,id) ;
-								break;
-							}
+		bool checkOnly = (dwTSID&~7UL)!=0 ,checkFinished=false ;
+		Sleep(50);
+		for (DWORD t=0,s=dur(); t<m_dwMaxDurTMCC; t=dur(s)) {
+			PTTSIDLIST PtTSIDList = {0};
+			bRes = GetIdListS(iID, &PtTSIDList);
+			if (bRes) {
+				for (uint32 i=0; i<8; i++) {
+					DWORD id = PtTSIDList.dwId[i]&0xffff;
+					if ((id&0xff00) && (id^0xffff)) {
+						if(checkOnly) {
+							//dwTSIDに既にTSIDを記述してある場合は、IDの一致だけを確かめる
+							// by 2022 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+							if(checkFinished = dwTSID == id) break;
+						}
+						else if( (id&7) == dwTSID ) {
+							//dwTSIDに0～7が指定された場合は、TSIDをチューナーから取得して
+							//下位３ビットと一致するものに書き換える
+							// by 2020 LVhJPic0JSk5LiQ1ITskKVk9UGBg
+							dwTSID = id ;
+							_OutputDebugString(L"CPT%dManager::SetCh: replaced TSID=%d\n",PT_VER,id) ;
+							break;
 						}
 					}
-					if(dwTSID&~7UL) break ;
 				}
-				Sleep(50);
 			}
+			Sleep(50);
+		}
+		if(checkOnly&&!checkFinished) {
+			_OutputDebugString(L"CPT%dManager::SetCh: TSID:%04x was not found on TMCC!\n",PT_VER,dwTSID) ;
+			return FALSE;
 		}
 		if(dwTSID&~7UL) {
 			if(!SetIdS(iID, dwTSID)) {
