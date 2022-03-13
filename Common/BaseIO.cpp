@@ -245,44 +245,47 @@ void CBaseIO::Flush(PTBUFFER &buf, BOOL dispose)
 //-----
 UINT CBaseIO::MemStreamingThreadProcMain(DWORD dwID)
 {
-	const DWORD CmdWait = 100;
+	const DWORD CmdWait = 100 ;
 	const size_t sln = wstring(SHAREDMEM_TRANSPORT_STREAM_SUFFIX).length();
+
+	PTBUFFER_OBJECT *obj = nullptr ;
 
 	while (!m_bMemStreamingTerm) {
 
 		auto tx = [&](PTBUFFER &buf, CSharedTransportStreamer *st) -> void {
 			if(BuffLock(dwID,CmdWait)) {
-				if(!buf.empty() && st!=NULL) {
-					wstring mutexName = st->Name().substr(0, st->Name().length() - sln);
-					if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,mutexName.c_str())) {
-						CloseHandle(hMutex);
-						do {
-							auto p = buf.pull() ;
-							auto data = p->data() ;
-							auto size = p->size() ;
-							if(buf.empty()) m_fDataCarry[dwID] = false ;
-							BuffUnLock(dwID);
-							if(!st->Tx(data,(DWORD)size,CmdWait)) {
-								if(BuffLock(dwID)) {
-									if(buf.pull_undo())
-										m_fDataCarry[dwID] = true ;
-									BuffUnLock(dwID);
-								}else
+				if(obj!=nullptr||!buf.empty()) {
+					if(st!=NULL) {
+						wstring mutexName = st->Name().substr(0, st->Name().length() - sln);
+						if(HANDLE hMutex = OpenMutex(MUTEX_ALL_ACCESS,FALSE,mutexName.c_str())) {
+							CloseHandle(hMutex);
+							do {
+								if(obj==nullptr) obj = buf.pull() ;
+								auto data = obj->data() ;
+								auto size = obj->size() ;
+								if(buf.empty()) m_fDataCarry[dwID] = false ;
+								BuffUnLock(dwID);
+								if(!st->Tx(data,(DWORD)size,CmdWait))
 									return ;
-							}
-							if(m_bMemStreamingTerm||!BuffLock(dwID,CmdWait))
-								return ;
-						}while(!buf.empty());
+								obj=nullptr;
+								if(m_bMemStreamingTerm||!BuffLock(dwID,CmdWait))
+									return ;
+							}while(!buf.empty());
+						}
 					}
-				}
+				}else
+					m_fDataCarry[dwID] = false ;
 				BuffUnLock(dwID);
 			}
 		};
 
-		if (m_fDataCarry[dwID])
+		if (!MemStreamer(dwID))
+			obj=nullptr, m_fDataCarry[dwID] = false ;
+
+		if (obj!=nullptr||m_fDataCarry[dwID])
 			tx(Buff(dwID), MemStreamer(dwID));
 
-		if (!m_fDataCarry[dwID])
+		if (obj!=nullptr||!m_fDataCarry[dwID])
 			Sleep(MemStreamer(dwID) ? 10 : CmdWait);
 	}
 
