@@ -122,53 +122,6 @@ HANDLE _CreateFile2( LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMod
 }
 
 
-static void sleep_(DWORD msec, DWORD usec)
-{
-  msec += usec/1000;
-  Sleep(msec>0?msec:1);
-}
-
-#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
-#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
-#endif
-
-static BOOL s_bHighResolutionSleepMode = FALSE;
-void SetHRSleepMode(BOOL useHighResolution)
-{ s_bHighResolutionSleepMode = useHighResolution ; }
-
-static bool doTimerSleep(HANDLE hTimer, const LARGE_INTEGER &time)
-{
-	return ( SetWaitableTimer(hTimer, &time, 0, NULL, NULL, 0) &&
-			WaitForSingleObject(hTimer,INFINITE)==WAIT_OBJECT_0 ) ;
-}
-
-void HRSleep(DWORD msec, DWORD usec)
-{
-	if(!s_bHighResolutionSleepMode&&!usec)
-	{ sleep_(msec,usec); return; }
-
-	HANDLE hTimer =
-#if _WIN_VER >= 0x0600
-		s_bHighResolutionSleepMode ?
-			CreateWaitableTimerEx(NULL, NULL,
-				CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS):
-			CreateWaitableTimer(NULL, FALSE, NULL);
-#else
-		CreateWaitableTimer(NULL, FALSE, NULL);
-#endif
-
-	if(hTimer == NULL)
-	{ sleep_(msec,usec); return; }
-
-	LARGE_INTEGER time;
-	time.QuadPart = - (msec*1000LL + usec) * 10LL ;
-
-	if(!doTimerSleep(hTimer, time))
-		sleep_(msec,usec);
-
-	CloseHandle(hTimer);
-}
-
 void _OutputDebugString(const TCHAR *format, ...)
 {
 	va_list params;

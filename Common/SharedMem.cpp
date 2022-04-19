@@ -3,6 +3,7 @@
 #include "SharedMem.h"
 #include "Util.h"
 #include "StringUtil.h"
+#include "HRTimer.h"
 //---------------------------------------------------------------------------
 
 using namespace std;
@@ -53,7 +54,7 @@ bool CSharedMemory::IsValid() const
 bool CSharedMemory::Lock(DWORD timeout) const
 {
     if(!HMutex) return false ;
-    return WaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
+    return HRWaitForSingleObject(HMutex, timeout) == WAIT_OBJECT_0 ;
 }
 //---------------------------------------------------------------------------
 bool CSharedMemory::Unlock() const
@@ -149,7 +150,7 @@ DWORD CSharedCmdOperator::WaitForCmd(DWORD timeout)
 		//DBGOUT("Succeeded to open Listen event \"%s\".\n",wcs2mbcs(NamListen).c_str());
 		DWORD past = dur(e);
 		timeout = past>timeout ? 0 : timeout - past ;
-		res = WaitForSingleObject(hListen, timeout) ;
+		res = HRWaitForSingleObject(hListen, timeout) ;
 		#if 0
 		if(res==WAIT_OBJECT_0) {
 			DBGOUT("WaitForCmd \"%s\" successful.\n",wcs2mbcs(NamListen).c_str());
@@ -198,7 +199,7 @@ bool CSharedPacketStreamer::LockPacket(DWORD index, DWORD timeout) const
 {
 	if(!PacketMutex||index>=NumPacket||!PacketMutex[index])
 		return Lock(timeout);
-	return WaitForSingleObject(PacketMutex[index], timeout) == WAIT_OBJECT_0 ;
+	return HRWaitForSingleObject(PacketMutex[index], timeout) == WAIT_OBJECT_0 ;
 }
 //---------------------------------------------------------------------------
 bool CSharedPacketStreamer::UnlockPacket(DWORD index) const
